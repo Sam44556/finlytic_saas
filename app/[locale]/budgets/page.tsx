@@ -132,7 +132,9 @@ function BudgetsContent() {
                 <Label>{tCommon('category')}</Label>
                 <Select value={form.category} onValueChange={handleCategoryChange}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select category" />
+                    <SelectValue placeholder="Select category">
+                      {form.category || "Select category"}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {EXPENSE_CATEGORIES.map((cat) => (

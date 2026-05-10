@@ -7,11 +7,17 @@ import { Card } from "@/components/ui/card";
 import { Wallet, BarChart3, Bot, Shield, Zap, Check, ArrowRight, TrendingUp, Target } from "lucide-react";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useTranslations } from 'next-intl';
+import { useAuth } from "@/contexts/AuthContext";
+import { stripeApi } from "@/lib/api-client";
+import { toast } from "sonner";
+import { useState } from "react";
 
 export default function LandingPage() {
   const t = useTranslations('landing');
   const params = useParams();
   const locale = (params.locale as string) || 'en';
+  const { user } = useAuth();
+  const [loading, setLoading] = useState<string | null>(null);
   
   const features = [
     { icon: BarChart3, titleKey: "feature1Title", descKey: "feature1Desc" },
@@ -28,7 +34,8 @@ export default function LandingPage() {
       price: "$0", 
       descKey: "pricingFreeDesc", 
       featuresKeys: ["pricingFreeFeature1", "pricingFreeFeature2", "pricingFreeFeature3", "pricingFreeFeature4"], 
-      ctaKey: "pricingFreeCta" 
+      ctaKey: "pricingFreeCta",
+      priceId: null,
     },
     { 
       nameKey: "pricingProName", 
@@ -37,16 +44,57 @@ export default function LandingPage() {
       descKey: "pricingProDesc", 
       featuresKeys: ["pricingProFeature1", "pricingProFeature2", "pricingProFeature3", "pricingProFeature4", "pricingProFeature5"], 
       ctaKey: "pricingProCta", 
-      featured: true 
+      featured: true,
+      priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY,
     },
     { 
       nameKey: "pricingLifetimeName", 
       price: "$199", 
       descKey: "pricingLifetimeDesc", 
       featuresKeys: ["pricingLifetimeFeature1", "pricingLifetimeFeature2", "pricingLifetimeFeature3", "pricingLifetimeFeature4"], 
-      ctaKey: "pricingLifetimeCta" 
+      ctaKey: "pricingLifetimeCta",
+      priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_LIFETIME,
     },
   ];
+
+  /**
+   * Handle checkout button click
+   * 
+   * WHAT THIS DOES:
+   * 1. Check if user is logged in
+   * 2. If not logged in, redirect to auth page
+   * 3. If logged in, call API to create Stripe checkout session
+   * 4. Redirect user to Stripe payment page
+   */
+  const handleCheckout = async (priceId: string | null, tierName: string) => {
+    // Free tier - just redirect to signup
+    if (!priceId) {
+      window.location.href = `/${locale}/auth`;
+      return;
+    }
+
+    // Check if user is logged in
+    if (!user) {
+      toast.error('Please sign in first');
+      window.location.href = `/${locale}/auth`;
+      return;
+    }
+
+    try {
+      setLoading(tierName);
+      
+      // Call API to create checkout session
+      const { url } = await stripeApi.createCheckout(priceId, user.id);
+      
+      // Redirect to Stripe checkout page
+      window.location.href = url;
+      
+    } catch (error: any) {
+      console.error('Checkout error:', error);
+      toast.error(error.message || 'Failed to start checkout');
+      setLoading(null);
+    }
+  };
   
   return (
     <div className="min-h-screen bg-background">
@@ -127,8 +175,13 @@ export default function LandingPage() {
               <h3 className="font-semibold text-lg">{t(tier.nameKey)}</h3>
               <p className="text-sm text-muted-foreground mb-4">{t(tier.descKey)}</p>
               <div className="mb-6"><span className="text-4xl font-bold">{tier.price}</span><span className="text-muted-foreground">{tier.period}</span></div>
-              <Button asChild className={`w-full mb-6 ${tier.featured ? "bg-gradient-primary" : ""}`} variant={tier.featured ? "default" : "outline"}>
-                <Link href={`/${locale}/auth`}>{t(tier.ctaKey)}</Link>
+              <Button 
+                onClick={() => handleCheckout(tier.priceId || null, tier.nameKey)}
+                disabled={loading === tier.nameKey}
+                className={`w-full mb-6 ${tier.featured ? "bg-gradient-primary" : ""}`} 
+                variant={tier.featured ? "default" : "outline"}
+              >
+                {loading === tier.nameKey ? 'Loading...' : t(tier.ctaKey)}
               </Button>
               <ul className="space-y-2.5 text-sm">
                 {tier.featuresKeys.map((fKey, i) => <li key={i} className="flex gap-2"><Check className="h-4 w-4 text-success shrink-0 mt-0.5" />{t(fKey)}</li>)}

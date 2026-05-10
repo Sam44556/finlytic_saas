@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
-import { TrendingUp, TrendingDown, Wallet, PiggyBank } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, Wallet2 } from "lucide-react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, CartesianGrid } from "recharts";
 import { format, startOfMonth, subMonths } from "date-fns";
 import { transactionsApi } from "@/lib/api-client";
@@ -76,7 +76,7 @@ function DashboardContent() {
   const stats = [
     { label: t('totalIncome'), value: income, icon: TrendingUp, color: "text-success", bg: "bg-success/10" },
     { label: t('totalExpenses'), value: expenses, icon: TrendingDown, color: "text-destructive", bg: "bg-destructive/10" },
-    { label: t('netBalance'), value: savings, icon: PiggyBank, color: "text-primary", bg: "bg-primary/10" },
+    { label: t('netBalance'), value: savings, icon: Wallet2, color: "text-primary", bg: "bg-primary/10" },
     { label: "Savings rate", value: `${savingsRate.toFixed(0)}%`, icon: Wallet, color: "text-accent", bg: "bg-accent/10", isPct: true },
   ];
 

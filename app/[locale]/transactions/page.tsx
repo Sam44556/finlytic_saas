@@ -171,7 +171,9 @@ function TransactionsContent() {
                     onValueChange={(v) => setForm({ ...form, type: v, category: "", customCategory: "" })}
                   >
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder={t('type')}>
+                        {form.type === 'income' ? t('income') : t('expense')}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="expense">{t('expense')}</SelectItem>
@@ -196,7 +198,9 @@ function TransactionsContent() {
                 <Label>{t('category')}</Label>
                 <Select value={form.category} onValueChange={handleCategoryChange}>
                   <SelectTrigger>
-                    <SelectValue placeholder={t('category')} />
+                    <SelectValue placeholder={t('category')}>
+                      {form.category || t('category')}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {availableCategories.map((cat) => (

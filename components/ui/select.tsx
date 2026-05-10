@@ -61,18 +61,28 @@ const SelectTrigger = React.forwardRef<
 })
 SelectTrigger.displayName = "SelectTrigger"
 
-const SelectValue = ({ placeholder }: { placeholder?: string }) => {
+const SelectValue = ({ placeholder, children }: { placeholder?: string; children?: React.ReactNode }) => {
   const { value } = useSelect()
   const [displayValue, setDisplayValue] = React.useState("")
 
   React.useEffect(() => {
+    // If children are provided, use them directly
+    if (children) {
+      return
+    }
+    
     const element = document.querySelector(`[data-value="${value}"]`)
     if (element) {
       setDisplayValue(element.textContent || "")
     } else {
       setDisplayValue("")
     }
-  }, [value])
+  }, [value, children])
+
+  // If children are provided, render them directly
+  if (children) {
+    return <span>{children}</span>
+  }
 
   return <span>{displayValue || placeholder}</span>
 }

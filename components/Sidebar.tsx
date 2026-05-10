@@ -6,14 +6,15 @@ import {
   Wallet, 
   LayoutDashboard, 
   Receipt, 
-  PiggyBank, 
+  Wallet2, 
   Target, 
   BarChart3, 
   Bot, 
   Settings, 
   LogOut,
   Menu,
-  X
+  X,
+  CreditCard
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
@@ -25,10 +26,11 @@ import { useState } from "react";
 const navItems = [
   { href: "/dashboard", key: "dashboard", icon: LayoutDashboard },
   { href: "/transactions", key: "transactions", icon: Receipt },
-  { href: "/budgets", key: "budgets", icon: PiggyBank },
+  { href: "/budgets", key: "budgets", icon: Wallet2 },
   { href: "/goals", key: "goals", icon: Target },
   { href: "/reports", key: "reports", icon: BarChart3 },
   { href: "/assistant", key: "assistant", icon: Bot },
+  { href: "/subscription", key: "subscription", icon: CreditCard },
   { href: "/settings", key: "settings", icon: Settings },
 ];
 

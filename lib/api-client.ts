@@ -92,3 +92,12 @@ export const assistantApi = {
     body: JSON.stringify({ message }),
   }),
 };
+
+// Stripe
+export const stripeApi = {
+  createCheckout: (priceId: string, userId: string) => 
+    apiRequest<{ url: string }>('/stripe/create-checkout', {
+      method: 'POST',
+      body: JSON.stringify({ priceId, userId }),
+    }),
+};

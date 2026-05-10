@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Wallet, LayoutDashboard, Receipt, PiggyBank, Target, BarChart3, Bot, Settings, LogOut } from "lucide-react";
+import { Wallet, LayoutDashboard, Receipt, Wallet2, Target, BarChart3, Bot, Settings, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -10,7 +10,7 @@ import { toast } from "sonner";
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/transactions", label: "Transactions", icon: Receipt },
-  { href: "/budgets", label: "Budgets", icon: PiggyBank },
+  { href: "/budgets", label: "Budgets", icon: Wallet2 },
   { href: "/goals", label: "Goals", icon: Target },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/assistant", label: "AI Assistant", icon: Bot },
