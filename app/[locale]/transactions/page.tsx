@@ -73,7 +73,7 @@ function TransactionsContent() {
   const openEdit = (t: Tx) => {
     setEditing(t);
     const categories = getCategoriesByType(t.type as 'income' | 'expense');
-    const isCustom = t.category && !categories.includes(t.category);
+    const isCustom = !!(t.category && !categories.includes(t.category));
     
     setShowCustomCategory(isCustom);
     setForm({ 
