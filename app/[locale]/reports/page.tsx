@@ -48,8 +48,13 @@ function ReportsContent() {
     const fetchProfile = async () => {
       try {
         const token = await getToken();
-        if (!token) return;
+        if (!token) {
+          console.log('No token available');
+          setIsLoadingProfile(false);
+          return;
+        }
 
+        console.log('Fetching profile with token...');
         const response = await fetch('/api/profiles', {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -57,11 +62,22 @@ function ReportsContent() {
         });
 
         if (response.ok) {
-          const data = await response.json();
-          setSubscriptionTier(data.subscription_tier || 'free');
+          const result = await response.json();
+          console.log('Profile response:', result);
+          
+          // The API returns { data: { ...profile } }
+          const profileData = result.data || result;
+          console.log('Profile data:', profileData);
+          console.log('Subscription tier:', profileData?.subscription_tier);
+          
+          setSubscriptionTier(profileData?.subscription_tier || 'free');
+        } else {
+          console.error('Failed to fetch profile:', response.status);
+          setSubscriptionTier('free');
         }
       } catch (error) {
         console.error('Failed to fetch profile:', error);
+        setSubscriptionTier('free');
       } finally {
         setIsLoadingProfile(false);
       }
@@ -71,8 +87,10 @@ function ReportsContent() {
   }, [getToken]);
 
   const handleOptionClick = (option: ReportOption) => {
+    console.log('Current subscription tier:', subscriptionTier);
+    
     // Check if user has pro or lifetime subscription
-    if (subscriptionTier === 'free') {
+    if (subscriptionTier === 'free' || subscriptionTier === null) {
       // Show upgrade dialog
       const confirmed = window.confirm(
         'Reports feature is only available for Pro and Lifetime subscribers.\n\n' +
@@ -326,7 +344,9 @@ function ReportsContent() {
     );
   }
 
-  const isFreeUser = subscriptionTier === 'free';
+  const isFreeUser = !subscriptionTier || subscriptionTier === 'free';
+  
+  console.log('Is free user?', isFreeUser, 'Tier:', subscriptionTier);
 
   return (
     <div className="space-y-6">
