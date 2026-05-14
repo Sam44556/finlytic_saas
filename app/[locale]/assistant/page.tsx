@@ -11,6 +11,7 @@ import { supabase } from "@/lib/supabase/client";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useTranslations } from 'next-intl';
+import ReactMarkdown from 'react-markdown';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -110,7 +111,7 @@ function AssistantContent() {
   return (
     <div className="h-[calc(100vh-8rem)] flex flex-col">
       <div className="mb-4">
-        <h1 className="text-3xl font-bold">{t('title')}</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">{t('title')}</h1>
         <p className="text-muted-foreground">{t('askAnything')}</p>
       </div>
 
@@ -152,10 +153,27 @@ function AssistantContent() {
                 className={`max-w-[80%] rounded-lg p-3 ${
                   msg.role === 'user'
                     ? 'bg-gradient-primary text-white'
-                    : 'bg-accent'
+                    : 'bg-accent text-foreground'
                 }`}
               >
-                <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                {msg.role === 'assistant' ? (
+                  <div className="text-sm prose prose-sm dark:prose-invert max-w-none [&_strong]:font-medium [&_h2]:text-base [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-medium">
+                    <ReactMarkdown
+                      components={{
+                        p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
+                        ul: ({ children }) => <ul className="my-2 list-disc pl-4 space-y-1">{children}</ul>,
+                        ol: ({ children }) => <ol className="my-2 list-decimal pl-4 space-y-1">{children}</ol>,
+                        strong: ({ children }) => (
+                          <span className="font-medium text-foreground">{children}</span>
+                        ),
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                )}
                 <p className={`text-xs mt-1 ${msg.role === 'user' ? 'text-white/70' : 'text-muted-foreground'}`}>
                   {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </p>

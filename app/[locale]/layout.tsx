@@ -1,6 +1,7 @@
 import {NextIntlClientProvider} from 'next-intl';
 import {getMessages} from 'next-intl/server';
 import { AuthProvider } from "@/contexts/AuthContext";
+import { FloatingAssistant } from "@/components/FloatingAssistant";
 import { Toaster } from "@/components/ui/sonner";
 import { Inter } from "next/font/google";
 import "../globals.css";
@@ -23,6 +24,7 @@ export default async function LocaleLayout({
         <NextIntlClientProvider locale={locale} messages={messages}>
           <AuthProvider>
             {children}
+            <FloatingAssistant />
             <Toaster />
           </AuthProvider>
         </NextIntlClientProvider>

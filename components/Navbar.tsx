@@ -13,7 +13,6 @@ const navItems = [
   { href: "/budgets", label: "Budgets", icon: Wallet2 },
   { href: "/goals", label: "Goals", icon: Target },
   { href: "/reports", label: "Reports", icon: BarChart3 },
-  { href: "/assistant", label: "AI Assistant", icon: Bot },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -40,7 +39,7 @@ export function Navbar() {
             <div className="h-8 w-8 rounded-lg bg-gradient-primary flex items-center justify-center">
               <Wallet className="h-4 w-4 text-primary-foreground" />
             </div>
-            <span className="font-bold text-lg">Finlytic</span>
+            <span className="font-semibold text-lg">Finlytic</span>
           </Link>
           <div className="hidden md:flex items-center gap-1">
             {navItems.map((item) => {

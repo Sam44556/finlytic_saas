@@ -64,7 +64,7 @@ export default function AuthPage() {
           <div className="h-10 w-10 rounded-lg bg-gradient-primary flex items-center justify-center">
             <Wallet className="h-5 w-5 text-primary-foreground" />
           </div>
-          <span className="font-bold text-2xl">Finlytic</span>
+          <span className="font-semibold text-2xl">Finlytic</span>
         </Link>
         <Card className="p-6 shadow-elegant">
           <div className="flex gap-2 mb-6">

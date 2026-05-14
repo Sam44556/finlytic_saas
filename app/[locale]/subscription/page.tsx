@@ -127,7 +127,7 @@ export default function SubscriptionPage() {
 
         {/* Header */}
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold mb-4">
+          <h1 className="text-4xl font-semibold tracking-tight mb-4">
             {t('title')}
           </h1>
           <p className="text-muted-foreground text-lg">
@@ -181,12 +181,12 @@ export default function SubscriptionPage() {
                 )}
 
                 <div className="mb-6">
-                  <h3 className="text-2xl font-bold mb-2">{tier.name}</h3>
+                  <h3 className="text-2xl font-semibold mb-2">{tier.name}</h3>
                   <p className="text-sm text-muted-foreground mb-4">
                     {tier.description}
                   </p>
                   <div className="flex items-baseline gap-1">
-                    <span className="text-5xl font-bold">{tier.price}</span>
+                    <span className="text-5xl font-semibold">{tier.price}</span>
                     <span className="text-muted-foreground">/{tier.period}</span>
                   </div>
                 </div>

@@ -1,93 +1,589 @@
 "use client"
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Lock, Sparkles } from "lucide-react";
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from "recharts";
-import { format, startOfMonth, subMonths } from "date-fns";
-import { transactionsApi, profileApi } from "@/lib/api-client";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FileDown, Upload, Eye } from "lucide-react";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useTranslations } from 'next-intl';
+import { useAuth } from '@/contexts/AuthContext';
+import { format } from "date-fns";
+
+type ReportOption = 'pdf' | 'csv' | 'import' | null;
 
 function ReportsContent() {
   const t = useTranslations('reports');
-  const [tier, setTier] = useState<string>("free");
-  const [data, setData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { getToken } = useAuth();
+  const [selectedOption, setSelectedOption] = useState<ReportOption>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  // Generate last 12 months for period dropdown
+  const generateMonthOptions = () => {
+    const months = [];
+    const today = new Date();
+    for (let i = 0; i < 12; i++) {
+      const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      months.push(format(date, "MMMM yyyy"));
+    }
+    return months;
+  };
 
-  const loadData = async () => {
-    try {
-      const [profileRes, txRes] = await Promise.all([profileApi.get(), transactionsApi.getAll()]);
+  const monthOptions = generateMonthOptions();
 
-      setTier(profileRes.data?.subscription_tier || "free");
+  const handleOptionClick = (option: ReportOption) => {
+    setSelectedOption(option);
+    setIsDialogOpen(true);
+  };
 
-      const txns = txRes.data || [];
-      const months = Array.from({ length: 12 }).map((_, i) => {
-        const d = subMonths(new Date(), 11 - i);
-        const ms = startOfMonth(d).toISOString().slice(0, 10);
-        const me = startOfMonth(subMonths(d, -1)).toISOString().slice(0, 10);
-        const m = txns.filter((t: any) => t.date >= ms && t.date < me);
-        return {
-          month: format(d, "MMM"),
-          income: m.filter((t: any) => t.type === "income").reduce((s: number, t: any) => s + Number(t.amount), 0),
-          expenses: m.filter((t: any) => t.type === "expense").reduce((s: number, t: any) => s + Number(t.amount), 0),
-        };
-      });
-      setData(months);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
+  const closeDialog = () => {
+    setIsDialogOpen(false);
+    setIsLoading(false);
+  };
+
+  // PDF Form State
+  const [pdfType, setPdfType] = useState("Report");
+  const [pdfPeriod, setPdfPeriod] = useState(format(new Date(), "MMMM yyyy"));
+  const [pdfIncludeIncome, setPdfIncludeIncome] = useState(true);
+  const [pdfIncludeExpenses, setPdfIncludeExpenses] = useState(true);
+  const [pdfIncludeBudgets, setPdfIncludeBudgets] = useState(true);
+
+  // CSV Form State
+  const [csvSeparator, setCsvSeparator] = useState(";");
+  const [csvFromDate, setCsvFromDate] = useState("01.04.2026");
+  const [csvToDate, setCsvToDate] = useState("30.04.2026");
+  const [csvQuickSelect, setCsvQuickSelect] = useState("Last month");
+  const [csvIncludeIncome, setCsvIncludeIncome] = useState(true);
+  const [csvIncludeExpenses, setCsvIncludeExpenses] = useState(true);
+  const [csvIncludeTransfers, setCsvIncludeTransfers] = useState(false);
+
+  // Import Form State
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importDateFormat, setImportDateFormat] = useState("13/05/2026");
+  const [importHeaderPresent, setImportHeaderPresent] = useState(true);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setImportFile(e.target.files[0]);
     }
   };
 
-  if (loading) return <div className="text-muted-foreground">Loading…</div>;
+  const handleExportPdf = async () => {
+    try {
+      setIsLoading(true);
 
-  const isPro = tier === "pro" || tier === "lifetime";
+      const token = await getToken();
+      if (!token) {
+        alert('Please sign in first');
+        setIsLoading(false);
+        return;
+      }
+
+      const exportData = {
+        type: pdfType,
+        period: pdfPeriod,
+        includes: {
+          income: pdfIncludeIncome,
+          expenses: pdfIncludeExpenses,
+          budgets: pdfIncludeBudgets
+        }
+      };
+
+      console.log('Exporting report:', exportData);
+
+      const response = await fetch('/api/reports/export-pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(exportData)
+      });
+
+      if (!response.ok) {
+        let message = 'Failed to export report';
+        try {
+          const err = await response.json();
+          message = typeof err?.error === 'string' ? err.error : message;
+        } catch {
+          message = response.status === 401 ? 'Unauthorized — try signing out and back in.' : message;
+        }
+        throw new Error(message);
+      }
+
+      const htmlContent = await response.text();
+      const blob = new Blob(['\uFEFF', htmlContent], { type: 'text/html;charset=utf-8' });
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `financial-report-${pdfPeriod.replace(/\s+/g, '-')}.html`;
+      document.body.appendChild(a);
+      a.click();
+
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      closeDialog();
+      alert('Report downloaded as HTML. Open it in your browser; use Print (Ctrl+P) → Save as PDF if you want a PDF file.');
+    } catch (error: any) {
+      console.error('PDF Export Error:', error);
+      alert('Failed to export PDF: ' + error.message);
+      setIsLoading(false);
+    }
+  };
+
+  const handleExportCsv = async () => {
+    try {
+      setIsLoading(true);
+      const token = await getToken();
+      if (!token) {
+        alert('Please sign in first');
+        setIsLoading(false);
+        return;
+      }
+
+      const exportData = {
+        separator: csvSeparator,
+        fromDate: csvFromDate,
+        toDate: csvToDate,
+        includes: {
+          income: csvIncludeIncome,
+          expenses: csvIncludeExpenses,
+          transfers: csvIncludeTransfers
+        }
+      };
+
+      console.log('Exporting CSV with:', exportData);
+
+      const response = await fetch('/api/reports/export-csv', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(exportData)
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to export CSV');
+      }
+
+      // Download the CSV file
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `transactions-${csvFromDate}-to-${csvToDate}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      closeDialog();
+      alert('CSV file exported successfully!');
+    } catch (error: any) {
+      console.error('CSV Export Error:', error);
+      alert('Failed to export CSV: ' + error.message);
+      setIsLoading(false);
+    }
+  };
+
+  const handleImportFile = async () => {
+    try {
+      setIsLoading(true);
+      const token = await getToken();
+      if (!token) {
+        alert('Please sign in first');
+        setIsLoading(false);
+        return;
+      }
+
+      if (!importFile) {
+        alert('Please select a file first');
+        setIsLoading(false);
+        return;
+      }
+
+      console.log('Importing file:', {
+        file: importFile.name,
+        dateFormat: importDateFormat,
+        headerPresent: importHeaderPresent
+      });
+
+      // Create form data
+      const formData = new FormData();
+      formData.append('file', importFile);
+      formData.append('dateFormat', importDateFormat);
+      formData.append('headerPresent', String(importHeaderPresent));
+
+      const response = await fetch('/api/reports/import-csv', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to import file');
+      }
+
+      closeDialog();
+      
+      // Show success message with summary
+      alert(`✅ Import Successful!\n\n` +
+        `Total Imported: ${result.summary.totalImported} transactions\n` +
+        `Income: ${result.summary.incomeTransactions} transactions ($${result.summary.totalIncome})\n` +
+        `Expenses: ${result.summary.expenseTransactions} transactions ($${result.summary.totalExpenses})\n` +
+        `Net Amount: $${result.summary.netAmount}\n\n` +
+        `Please refresh the page to see your imported transactions.`);
+      
+      // Reset file input
+      setImportFile(null);
+      
+      // Optionally reload the page to show new transactions
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (error: any) {
+      console.error('Import Error:', error);
+      alert('Failed to import file: ' + error.message);
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">{t('title')}</h1>
-        <p className="text-muted-foreground">{t('monthlyTrends')}</p>
+        <h1 className="text-3xl font-semibold tracking-tight">{t('title')}</h1>
+        <p className="text-muted-foreground">Export and import your financial data</p>
       </div>
 
-      {!isPro && (
-        <Card className="p-8 text-center bg-gradient-to-br from-primary/5 to-accent/5 border-primary/20">
-          <div className="h-14 w-14 rounded-full bg-gradient-primary flex items-center justify-center mx-auto mb-4">
-            <Lock className="h-6 w-6 text-primary-foreground" />
+      <div className="grid gap-6 max-w-4xl">
+        {/* Export PDF Button */}
+        <Card 
+          className="p-8 cursor-pointer transition-all hover:shadow-lg"
+          onClick={() => handleOptionClick('pdf')}
+        >
+          <div className="flex items-start gap-6">
+            <div className="h-16 w-16 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
+              <FileDown className="h-8 w-8 text-gray-600 dark:text-gray-400" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-xl font-medium mb-2">{t('exportPdf')}</h3>
+              <p className="text-muted-foreground">{t('exportPdfDesc')}</p>
+            </div>
           </div>
-          <h2 className="text-xl font-bold mb-2">{t('exportReport')}</h2>
-          <p className="text-muted-foreground mb-4 max-w-md mx-auto">
-            Upgrade to Pro for 12-month trends, category analysis, exportable PDF/CSV reports, and AI-powered insights.
-          </p>
-          <Button className="bg-gradient-primary">
-            <Sparkles className="h-4 w-4" />
-            Upgrade to Pro
-          </Button>
         </Card>
-      )}
 
-      <Card className={`p-6 ${!isPro ? "opacity-50 pointer-events-none blur-sm" : ""}`}>
-        <h3 className="font-semibold mb-4">{t('yearlyComparison')}</h3>
-        <ResponsiveContainer width="100%" height={320}>
-          <BarChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-            <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-            <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
-            <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
-            <Legend />
-            <Bar dataKey="income" fill="hsl(var(--success))" radius={[6, 6, 0, 0]} />
-            <Bar dataKey="expenses" fill="hsl(var(--destructive))" radius={[6, 6, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </Card>
+        {/* Export CSV Button */}
+        <Card 
+          className="p-8 cursor-pointer transition-all hover:shadow-lg"
+          onClick={() => handleOptionClick('csv')}
+        >
+          <div className="flex items-start gap-6">
+            <div className="h-16 w-16 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
+              <FileDown className="h-8 w-8 text-gray-600 dark:text-gray-400" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-xl font-medium mb-2">{t('exportCsv')}</h3>
+              <p className="text-muted-foreground">{t('exportCsvDesc')}</p>
+            </div>
+          </div>
+        </Card>
+
+        {/* Import CSV/XLS Button */}
+        <Card 
+          className="p-8 cursor-pointer transition-all hover:shadow-lg"
+          onClick={() => handleOptionClick('import')}
+        >
+          <div className="flex items-start gap-6">
+            <div className="h-16 w-16 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <Upload className="h-8 w-8 text-primary" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-xl font-medium mb-2">{t('importCsv')}</h3>
+              <p className="text-muted-foreground">{t('importCsvDesc')}</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Dialog for Forms */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          {/* PDF Export Form */}
+          {selectedOption === 'pdf' && (
+            <div>
+              <DialogHeader>
+                <DialogTitle className="text-2xl font-medium text-center mb-6">{t('createFilePdf')}</DialogTitle>
+              </DialogHeader>
+              
+              <div className="space-y-6">
+                {/* Type */}
+                <div className="grid grid-cols-[120px_1fr] items-center gap-4">
+                  <Label className="text-base">{t('type')}</Label>
+                  <Select value={pdfType} onValueChange={setPdfType}>
+                    <SelectTrigger>
+                      <SelectValue>{pdfType}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Report">{t('report')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Period */}
+                <div className="grid grid-cols-[120px_1fr] items-center gap-4">
+                  <Label className="text-base">{t('period')}</Label>
+                  <Select value={pdfPeriod} onValueChange={setPdfPeriod}>
+                    <SelectTrigger>
+                      <SelectValue>{pdfPeriod}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {monthOptions.map((month) => (
+                        <SelectItem key={month} value={month}>
+                          {month}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Include reports on */}
+                <div className="grid grid-cols-[120px_1fr] items-start gap-4">
+                  <Label className="text-base pt-2">{t('includeReportsOn')}</Label>
+                  <div className="space-y-3">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={pdfIncludeIncome}
+                        onChange={(e) => setPdfIncludeIncome(e.target.checked)}
+                        className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary"
+                      />
+                      <span className="text-base">{t('income')}</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={pdfIncludeExpenses}
+                        onChange={(e) => setPdfIncludeExpenses(e.target.checked)}
+                        className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary"
+                      />
+                      <span className="text-base">{t('expenses')}</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={pdfIncludeBudgets}
+                        onChange={(e) => setPdfIncludeBudgets(e.target.checked)}
+                        className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary"
+                      />
+                      <span className="text-base">{t('budgets')}</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Export Button */}
+                <div className="flex justify-end pt-4">
+                  <Button 
+                    onClick={handleExportPdf}
+                    disabled={isLoading}
+                    className="bg-primary hover:bg-primary/90 text-white px-8 py-6 text-base font-medium rounded-full disabled:opacity-50"
+                  >
+                    {isLoading ? 'Generating PDF...' : t('exportPdfFileBtn')}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* CSV Export Form */}
+          {selectedOption === 'csv' && (
+            <div>
+              <DialogHeader>
+                <DialogTitle className="text-2xl font-medium text-center mb-6">{t('exportCsvFile')}</DialogTitle>
+              </DialogHeader>
+              
+              <div className="space-y-6">
+                {/* Separator */}
+                <div className="grid grid-cols-[140px_1fr] items-center gap-4">
+                  <Label className="text-base">{t('separator')}</Label>
+                  <Input
+                    value={csvSeparator}
+                    onChange={(e) => setCsvSeparator(e.target.value)}
+                    className="max-w-[240px]"
+                  />
+                </div>
+
+                {/* Date Range */}
+                <div className="grid grid-cols-[140px_1fr] items-center gap-4">
+                  <Label className="text-base">{t('from')}</Label>
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <Input
+                      value={csvFromDate}
+                      onChange={(e) => setCsvFromDate(e.target.value)}
+                      className="max-w-[180px]"
+                    />
+                    <Label className="text-base">{t('to')}</Label>
+                    <Input
+                      value={csvToDate}
+                      onChange={(e) => setCsvToDate(e.target.value)}
+                      className="max-w-[180px]"
+                    />
+                    <Select value={csvQuickSelect} onValueChange={setCsvQuickSelect}>
+                      <SelectTrigger className="max-w-[200px]">
+                        <SelectValue>{csvQuickSelect}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Last month">{t('lastMonth')}</SelectItem>
+                        <SelectItem value="This month">{t('thisMonth')}</SelectItem>
+                        <SelectItem value="Last 3 months">{t('last3Months')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Include transactions */}
+                <div className="grid grid-cols-[140px_1fr] items-start gap-4">
+                  <Label className="text-base pt-2">{t('includeTransactions')}</Label>
+                  <div className="space-y-3">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={csvIncludeIncome}
+                        onChange={(e) => setCsvIncludeIncome(e.target.checked)}
+                        className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary"
+                      />
+                      <span className="text-base">{t('income')}</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={csvIncludeExpenses}
+                        onChange={(e) => setCsvIncludeExpenses(e.target.checked)}
+                        className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary"
+                      />
+                      <span className="text-base">{t('expenses')}</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={csvIncludeTransfers}
+                        onChange={(e) => setCsvIncludeTransfers(e.target.checked)}
+                        className="h-5 w-5 rounded border-gray-300 text-gray-400"
+                      />
+                      <span className="text-base">{t('transfersAndPayments')}</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Other Section */}
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Eye className="h-5 w-5" />
+                  <span className="text-base font-medium">{t('other')}</span>
+                </div>
+
+                {/* Export Button */}
+                <div className="flex justify-end pt-4">
+                  <Button 
+                    onClick={handleExportCsv}
+                    disabled={isLoading}
+                    className="bg-primary hover:bg-primary/90 text-white px-8 py-6 text-base font-medium rounded-full disabled:opacity-50"
+                  >
+                    {isLoading ? 'Exporting CSV...' : t('exportCsvFileBtn')}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Import CSV/XLS Form */}
+          {selectedOption === 'import' && (
+            <div>
+              <DialogHeader>
+                <DialogTitle className="text-2xl font-medium text-center mb-6">{t('importCsvXlsFile')}</DialogTitle>
+              </DialogHeader>
+              
+              <div className="space-y-6">
+                {/* File Upload */}
+                <div className="flex items-center gap-4">
+                  <label 
+                    htmlFor="file-upload"
+                    className="px-6 py-2 border border-gray-300 rounded cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    {t('chooseFile')}
+                  </label>
+                  <input
+                    id="file-upload"
+                    type="file"
+                    accept=".csv,.xls,.xlsx"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <span className="text-muted-foreground">
+                    {importFile ? importFile.name : t('noFileChosen')}
+                  </span>
+                </div>
+
+                {/* Date Format */}
+                <div className="flex items-center gap-4">
+                  <Label className="text-base">{t('dateFormat')}</Label>
+                  <Input
+                    value={importDateFormat}
+                    onChange={(e) => setImportDateFormat(e.target.value)}
+                    className="max-w-[200px]"
+                  />
+                  <span className="text-muted-foreground">{t('today')}</span>
+                </div>
+
+                {/* Header Row Present */}
+                <div>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={importHeaderPresent}
+                      onChange={(e) => setImportHeaderPresent(e.target.checked)}
+                      className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                    <span className="text-base">{t('headerRowPresent')}</span>
+                  </label>
+                </div>
+
+                {/* FAQ Link */}
+                <div className="text-center pt-4">
+                  <a 
+                    href="#" 
+                    className="text-primary hover:underline text-base"
+                  >
+                    {t('frequentlyAskedQuestions')}
+                  </a>
+                </div>
+
+                {/* Import Button */}
+                <div className="flex justify-end pt-4">
+                  <Button 
+                    onClick={handleImportFile}
+                    disabled={!importFile || isLoading}
+                    className="bg-primary hover:bg-primary/90 text-white px-8 py-6 text-base font-medium rounded-full disabled:opacity-50"
+                  >
+                    {isLoading ? 'Importing...' : t('importCsvXlsFileBtn')}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

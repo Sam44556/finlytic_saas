@@ -38,7 +38,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const getToken = async () => {
     const { data: { session } } = await supabase.auth.getSession();
-    return session?.access_token ?? null;
+    const now = Math.floor(Date.now() / 1000);
+    const fresh =
+      session?.access_token &&
+      session.expires_at != null &&
+      session.expires_at > now + 60;
+
+    if (fresh) return session.access_token.trim();
+
+    const { data, error } = await supabase.auth.refreshSession();
+    if (!error && data.session?.access_token) return data.session.access_token.trim();
+
+    return session?.access_token?.trim() ?? null;
   };
 
   const signIn = async (email: string, password: string) => {

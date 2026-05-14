@@ -97,17 +97,17 @@ export default function LandingPage() {
   };
   
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background" style={{ fontSize: '16px' }}>
       {/* Nav */}
       <header className="border-b sticky top-0 z-40 bg-background/80 backdrop-blur">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-lg bg-gradient-primary flex items-center justify-center">
-              <Wallet className="h-5 w-5 text-primary-foreground" />
+            <div className="h-10 w-10 rounded-lg bg-gradient-primary flex items-center justify-center">
+              <Wallet className="h-6 w-6 text-primary-foreground" />
             </div>
-            <span className="font-bold text-lg">Finlytic</span>
+            <span className="font-semibold" style={{ fontSize: '20px' }}>Finlytic</span>
           </div>
-          <nav className="hidden md:flex items-center gap-6 text-sm">
+          <nav className="hidden md:flex items-center gap-6" style={{ fontSize: '15px' }}>
             <a href="#features" className="text-muted-foreground hover:text-foreground">{t('features')}</a>
             <a href="#pricing" className="text-muted-foreground hover:text-foreground">{t('pricing')}</a>
           </nav>
@@ -123,22 +123,22 @@ export default function LandingPage() {
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-hero opacity-10" />
         <div className="container mx-auto relative py-20 md:py-32 text-center px-4">
-          <div className="inline-flex items-center gap-2 rounded-full border bg-card px-4 py-1.5 text-sm shadow-card mb-6">
-            <Zap className="h-3.5 w-3.5 text-primary" />
+          <div className="inline-flex items-center gap-2 rounded-full border bg-card px-4 py-1.5 shadow-card mb-6" style={{ fontSize: '14px' }}>
+            <Zap className="h-4 w-4 text-primary" />
             <span>{t('tagline')}</span>
           </div>
-          <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">
+          <h1 className="font-semibold tracking-tight mb-6" style={{ fontSize: 'clamp(2rem, 5vw, 3.5rem)', lineHeight: '1.15' }}>
             {t('hero')}<br />
             <span className="text-gradient">{t('heroHighlight')}</span>
           </h1>
-          <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
+          <p className="text-muted-foreground max-w-2xl mx-auto mb-8" style={{ fontSize: 'clamp(1rem, 1.5vw, 1.125rem)', lineHeight: '1.6' }}>
             {t('heroDesc')}
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Button size="lg" asChild className="bg-gradient-primary hover:opacity-90 shadow-elegant">
+            <Button size="lg" asChild className="bg-gradient-primary hover:opacity-90 shadow-elegant" style={{ fontSize: '15px' }}>
               <Link href={`/${locale}/auth`}>{t('startFree')} <ArrowRight className="h-4 w-4" /></Link>
             </Button>
-            <Button size="lg" variant="outline" asChild><a href="#features">{t('seeFeatures')}</a></Button>
+            <Button size="lg" variant="outline" asChild style={{ fontSize: '15px' }}><a href="#features">{t('seeFeatures')}</a></Button>
           </div>
         </div>
       </section>
@@ -146,17 +146,17 @@ export default function LandingPage() {
       {/* Features */}
       <section id="features" className="container mx-auto py-20 px-4">
         <div className="text-center mb-12">
-          <h2 className="text-3xl md:text-4xl font-bold mb-3">{t('everythingYouNeed')}</h2>
-          <p className="text-muted-foreground">{t('powerfulTools')}</p>
+          <h2 className="font-semibold mb-3" style={{ fontSize: 'clamp(1.75rem, 3.5vw, 2.25rem)' }}>{t('everythingYouNeed')}</h2>
+          <p className="text-muted-foreground" style={{ fontSize: '16px' }}>{t('powerfulTools')}</p>
         </div>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {features.map((f, idx) => (
             <Card key={idx} className="p-6 hover:shadow-elegant transition-shadow">
-              <div className="h-11 w-11 rounded-lg bg-gradient-primary flex items-center justify-center mb-4">
-                <f.icon className="h-5 w-5 text-primary-foreground" />
+              <div className="h-12 w-12 rounded-lg bg-gradient-primary flex items-center justify-center mb-4">
+                <f.icon className="h-6 w-6 text-primary-foreground" />
               </div>
-              <h3 className="font-semibold text-lg mb-2">{t(f.titleKey)}</h3>
-              <p className="text-muted-foreground text-sm">{t(f.descKey)}</p>
+              <h3 className="font-medium mb-2" style={{ fontSize: '18px' }}>{t(f.titleKey)}</h3>
+              <p className="text-muted-foreground" style={{ fontSize: '14px', lineHeight: '1.5' }}>{t(f.descKey)}</p>
             </Card>
           ))}
         </div>
@@ -165,25 +165,26 @@ export default function LandingPage() {
       {/* Pricing */}
       <section id="pricing" className="container mx-auto py-20 px-4">
         <div className="text-center mb-12">
-          <h2 className="text-3xl md:text-4xl font-bold mb-3">{t('simplePricing')}</h2>
-          <p className="text-muted-foreground">{t('freeForever')}</p>
+          <h2 className="font-semibold mb-3" style={{ fontSize: 'clamp(1.75rem, 3.5vw, 2.25rem)' }}>{t('simplePricing')}</h2>
+          <p className="text-muted-foreground" style={{ fontSize: '16px' }}>{t('freeForever')}</p>
         </div>
         <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
           {tiers.map((tier, idx) => (
-            <Card key={idx} className={`p-8 relative ${tier.featured ? "border-primary shadow-elegant scale-105" : ""}`}>
-              {tier.featured && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-primary text-primary-foreground text-xs font-semibold px-3 py-1 rounded-full">{t('mostPopular')}</div>}
-              <h3 className="font-semibold text-lg">{t(tier.nameKey)}</h3>
-              <p className="text-sm text-muted-foreground mb-4">{t(tier.descKey)}</p>
-              <div className="mb-6"><span className="text-4xl font-bold">{tier.price}</span><span className="text-muted-foreground">{tier.period}</span></div>
+            <Card key={idx} className={`p-6 relative ${tier.featured ? "border-primary shadow-elegant scale-105" : ""}`}>
+              {tier.featured && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-primary text-primary-foreground font-semibold px-3 py-1 rounded-full" style={{ fontSize: '12px' }}>{t('mostPopular')}</div>}
+              <h3 className="font-medium mb-2" style={{ fontSize: '19px' }}>{t(tier.nameKey)}</h3>
+              <p className="text-muted-foreground mb-4" style={{ fontSize: '14px' }}>{t(tier.descKey)}</p>
+              <div className="mb-6"><span className="font-semibold" style={{ fontSize: '40px' }}>{tier.price}</span><span className="text-muted-foreground" style={{ fontSize: '16px' }}>{tier.period}</span></div>
               <Button 
                 onClick={() => handleCheckout(tier.priceId || null, tier.nameKey)}
                 disabled={loading === tier.nameKey}
                 className={`w-full mb-6 ${tier.featured ? "bg-gradient-primary" : ""}`} 
                 variant={tier.featured ? "default" : "outline"}
+                style={{ fontSize: '15px' }}
               >
                 {loading === tier.nameKey ? 'Loading...' : t(tier.ctaKey)}
               </Button>
-              <ul className="space-y-2.5 text-sm">
+              <ul className="space-y-2.5" style={{ fontSize: '14px' }}>
                 {tier.featuresKeys.map((fKey, i) => <li key={i} className="flex gap-2"><Check className="h-4 w-4 text-success shrink-0 mt-0.5" />{t(fKey)}</li>)}
               </ul>
             </Card>
@@ -191,7 +192,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <footer className="border-t py-8 text-center text-sm text-muted-foreground">
+      <footer className="border-t py-8 text-center text-muted-foreground" style={{ fontSize: '14px' }}>
         © 2026 Finlytic. {t('footer')}
       </footer>
     </div>

@@ -7,9 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, Pencil } from "lucide-react";
+import { Plus, Trash2, Pencil, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
-import { format } from "date-fns";
+import { format, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
 import { transactionsApi } from "@/lib/api-client";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -30,6 +30,7 @@ function TransactionsContent() {
   const tCommon = useTranslations('common');
   const [txns, setTxns] = useState<Tx[]>([]);
   const [filter, setFilter] = useState<"all" | "income" | "expense">("all");
+  const [currentMonth, setCurrentMonth] = useState(new Date());
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Tx | null>(null);
   const [showCustomCategory, setShowCustomCategory] = useState(false);
@@ -142,13 +143,28 @@ function TransactionsContent() {
   };
 
   const filtered = filter === "all" ? txns : txns.filter((t) => t.type === filter);
+  
+  // Filter by current month
+  const monthStart = format(startOfMonth(currentMonth), "yyyy-MM-dd");
+  const monthEnd = format(endOfMonth(currentMonth), "yyyy-MM-dd");
+  const monthFiltered = filtered.filter((t) => t.date >= monthStart && t.date <= monthEnd);
+  
+  // Calculate totals for the month
+  const monthIncome = monthFiltered.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
+  const monthExpenses = monthFiltered.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
+  const monthTotal = monthIncome - monthExpenses;
+  
   const availableCategories = getCategoriesByType(form.type as 'income' | 'expense');
+
+  const goToPreviousMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
+  const goToNextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
+  const goToCurrentMonth = () => setCurrentMonth(new Date());
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-bold">{t('title')}</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">{t('title')}</h1>
           <p className="text-muted-foreground">{t('startTracking')}</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
@@ -251,6 +267,52 @@ function TransactionsContent() {
         </Dialog>
       </div>
 
+      {/* Month Navigation */}
+      <Card className="p-4">
+        <div className="flex items-center justify-between">
+          <Button variant="ghost" size="icon" onClick={goToPreviousMonth}>
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+          <div className="flex items-center gap-4">
+            <h2 className="text-2xl font-semibold tracking-tight">{format(currentMonth, "MMMM yyyy")}</h2>
+            {format(currentMonth, "yyyy-MM") !== format(new Date(), "yyyy-MM") && (
+              <Button variant="outline" size="sm" onClick={goToCurrentMonth}>
+                Today
+              </Button>
+            )}
+          </div>
+          <Button variant="ghost" size="icon" onClick={goToNextMonth}>
+            <ChevronRight className="h-5 w-5" />
+          </Button>
+        </div>
+      </Card>
+
+      {/* Summary Bar */}
+      <Card className="p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground">Transactions:</span>
+            <span className="font-medium">{monthFiltered.length}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground">Total:</span>
+            <span className={`text-xl font-semibold ${monthTotal >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              ${Math.abs(monthTotal).toFixed(2)}
+            </span>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t">
+          <div>
+            <p className="text-sm text-muted-foreground">Income</p>
+            <p className="text-lg font-medium text-green-600">+${monthIncome.toFixed(2)}</p>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Expenses</p>
+            <p className="text-lg font-medium text-red-600">-${monthExpenses.toFixed(2)}</p>
+          </div>
+        </div>
+      </Card>
+
       <div className="flex gap-2">
         {(["all", "income", "expense"] as const).map((f) => (
           <Button 
@@ -266,16 +328,16 @@ function TransactionsContent() {
       </div>
 
       <Card className="divide-y">
-        {filtered.length === 0 ? (
+        {monthFiltered.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground">
             {t('noTransactions')}
           </div>
         ) : (
-          filtered.map((t) => (
+          monthFiltered.map((t) => (
             <div key={t.id} className="flex items-center justify-between p-4 hover:bg-accent/5">
               <div className="flex items-center gap-3 min-w-0">
                 <div 
-                  className="h-10 w-10 rounded-full shrink-0 flex items-center justify-center text-white font-semibold" 
+                  className="h-10 w-10 rounded-full shrink-0 flex items-center justify-center text-white font-medium" 
                   style={{ backgroundColor: t.type === 'income' ? '#10b981' : '#8b5cf6' }}
                 >
                   {t.type === 'income' ? '+' : '-'}
@@ -288,7 +350,7 @@ function TransactionsContent() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className={`font-semibold ${t.type === "income" ? "text-green-600" : "text-red-600"}`}>
+                <span className={`font-medium ${t.type === "income" ? "text-green-600" : "text-red-600"}`}>
                   {t.type === "income" ? "+" : "-"}${Number(t.amount).toFixed(2)}
                 </span>
                 <Button size="icon" variant="ghost" onClick={() => openEdit(t)}>

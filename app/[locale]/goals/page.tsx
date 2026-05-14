@@ -88,7 +88,7 @@ function GoalsContent() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-bold">{t('title')}</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">{t('title')}</h1>
           <p className="text-muted-foreground">{t('startSaving')}</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
@@ -143,7 +143,7 @@ function GoalsContent() {
                       <Target className="h-5 w-5 text-primary-foreground" />
                     </div>
                     <div>
-                      <p className="font-semibold">{g.name}</p>
+                      <p className="font-medium">{g.name}</p>
                       <p className="text-xs text-muted-foreground">
                         ${Number(g.current_amount).toFixed(2)} of ${Number(g.target_amount).toFixed(2)}
                         {g.deadline ? ` • by ${format(new Date(g.deadline), "MMM d, yyyy")}` : ""}

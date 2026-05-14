@@ -1,48 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { generateGeminiText } from '@/lib/gemini-generate';
 
-// Initialize Gemini AI
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+
+const TX_LIMIT = 2000;
 
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    
-    console.log('AI Assistant - Auth header present:', !!authHeader);
-    
+    const authHeader =
+      request.headers.get('authorization') ?? request.headers.get('Authorization');
+
     if (!authHeader) {
-      console.log('AI Assistant - No authorization header');
       return NextResponse.json({ error: 'No authorization header' }, { status: 401 });
     }
 
-    const token = authHeader.replace('Bearer ', '');
-    console.log('AI Assistant - Token length:', token.length);
-    
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized: empty token' }, { status: 401 });
+    }
+
     const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
 
     if (authError) {
-      console.log('AI Assistant - Auth error:', authError.message);
       return NextResponse.json({ error: 'Unauthorized: ' + authError.message }, { status: 401 });
     }
-    
+
     if (!user) {
-      console.log('AI Assistant - No user found');
       return NextResponse.json({ error: 'Unauthorized: No user found' }, { status: 401 });
     }
 
-    console.log('AI Assistant - User authenticated:', user.id);
-
     const { message } = await request.json();
 
-    if (!message) {
+    if (!message || typeof message !== 'string') {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
-    // Fetch user's financial data from database
+    const userMessage = message.trim().slice(0, 4000);
+
     const [profileRes, transactionsRes, budgetsRes, goalsRes] = await Promise.all([
       supabaseAdmin.from('profiles').select('*').eq('id', user.id).single(),
-      supabaseAdmin.from('transactions').select('*').eq('user_id', user.id).order('date', { ascending: false }).limit(100),
+      supabaseAdmin
+        .from('transactions')
+        .select('type, amount, date, category, description')
+        .eq('user_id', user.id)
+        .order('date', { ascending: false })
+        .limit(TX_LIMIT),
       supabaseAdmin.from('budgets').select('*').eq('user_id', user.id),
       supabaseAdmin.from('goals').select('*').eq('user_id', user.id),
     ]);
@@ -52,182 +56,176 @@ export async function POST(request: NextRequest) {
     const budgets = budgetsRes.data || [];
     const goals = goalsRes.data || [];
 
-    // Calculate financial summary
     const totalIncome = transactions
-      .filter(t => t.type === 'income')
+      .filter((t) => t.type === 'income')
       .reduce((sum, t) => sum + Number(t.amount), 0);
 
     const totalExpenses = transactions
-      .filter(t => t.type === 'expense')
+      .filter((t) => t.type === 'expense')
       .reduce((sum, t) => sum + Number(t.amount), 0);
 
     const netBalance = totalIncome - totalExpenses;
 
-    // Calculate spending by category
     const spendingByCategory: Record<string, number> = {};
     transactions
-      .filter(t => t.type === 'expense' && t.category)
-      .forEach(t => {
-        spendingByCategory[t.category] = (spendingByCategory[t.category] || 0) + Number(t.amount);
+      .filter((t) => t.type === 'expense' && t.category)
+      .forEach((t) => {
+        spendingByCategory[t.category!] =
+          (spendingByCategory[t.category!] || 0) + Number(t.amount);
       });
 
-    // Calculate current month spending
+    const incomeByCategory: Record<string, number> = {};
+    transactions
+      .filter((t) => t.type === 'income' && t.category)
+      .forEach((t) => {
+        incomeByCategory[t.category!] =
+          (incomeByCategory[t.category!] || 0) + Number(t.amount);
+      });
+
     const currentMonth = new Date().toISOString().slice(0, 7);
-    const monthlyTransactions = transactions.filter(t => t.date.startsWith(currentMonth));
+    const monthlyTransactions = transactions.filter((t) => t.date.startsWith(currentMonth));
     const monthlyIncome = monthlyTransactions
-      .filter(t => t.type === 'income')
+      .filter((t) => t.type === 'income')
       .reduce((sum, t) => sum + Number(t.amount), 0);
     const monthlyExpenses = monthlyTransactions
-      .filter(t => t.type === 'expense')
+      .filter((t) => t.type === 'expense')
       .reduce((sum, t) => sum + Number(t.amount), 0);
 
-    // Calculate budget status
-    const budgetStatus = budgets.map(budget => {
+    const budgetStatus = budgets.map((budget) => {
       const spent = monthlyTransactions
-        .filter(t => t.type === 'expense' && t.category === budget.category)
+        .filter((t) => t.type === 'expense' && t.category === budget.category)
         .reduce((sum, t) => sum + Number(t.amount), 0);
-      const remaining = Number(budget.amount) - spent;
-      const percentage = (spent / Number(budget.amount)) * 100;
+      const cap = Number(budget.amount);
+      const percentage = cap > 0 ? (spent / cap) * 100 : 0;
       return {
         category: budget.category,
-        budget: Number(budget.amount),
+        budget: cap,
         spent,
-        remaining,
+        remaining: cap - spent,
         percentage: Math.round(percentage),
-        status: percentage > 100 ? 'over' : percentage > 80 ? 'warning' : 'good'
+        status: percentage > 100 ? 'over' : percentage > 80 ? 'warning' : 'good',
       };
     });
 
-    // Calculate goal progress
-    const goalProgress = goals.map(goal => {
-      const progress = (Number(goal.current_amount) / Number(goal.target_amount)) * 100;
+    const goalProgress = goals.map((goal) => {
+      const target = Number(goal.target_amount);
+      const current = Number(goal.current_amount);
+      const progress = target > 0 ? (current / target) * 100 : 0;
       return {
         name: goal.name,
-        target: Number(goal.target_amount),
-        current: Number(goal.current_amount),
-        remaining: Number(goal.target_amount) - Number(goal.current_amount),
+        target,
+        current,
+        remaining: target - current,
         progress: Math.round(progress),
-        deadline: goal.deadline
+        deadline: goal.deadline,
       };
     });
 
-    // Get top spending categories
-    const topCategories = Object.entries(spendingByCategory)
+    const topExpenseCategories = Object.entries(spendingByCategory)
       .sort(([, a], [, b]) => b - a)
-      .slice(0, 5)
+      .slice(0, 8)
       .map(([category, amount]) => ({ category, amount }));
 
-    // Recent transactions
-    const recentTransactions = transactions.slice(0, 10).map(t => ({
-      date: t.date,
-      type: t.type,
-      category: t.category || 'Uncategorized',
-      amount: Number(t.amount),
-      description: t.description
-    }));
+    const topIncomeCategories = Object.entries(incomeByCategory)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 6)
+      .map(([category, amount]) => ({ category, amount }));
 
-    // Try to use Gemini AI
+    const recentLines = transactions.slice(0, 40).map((t) => {
+      const sign = t.type === 'income' ? '+' : '-';
+      const desc = t.description ? ` — ${String(t.description).slice(0, 60)}` : '';
+      return `${t.date} | ${t.type} | ${t.category || 'Uncategorized'} | ${sign}$${Number(t.amount).toFixed(2)}${desc}`;
+    });
+
+    const dataNote =
+      transactions.length >= TX_LIMIT
+        ? `(Totals and lists use your ${TX_LIMIT} most recent transactions by date; older activity is not in this snapshot.)`
+        : `(All figures below are from your ${transactions.length} stored transactions.)`;
+
+    const prompt = `You are Finley, a sharp personal-finance copilot. You ONLY use the DATABASE CONTEXT below — never invent transactions, balances, or categories. If the user asks something you cannot answer from this data (tax law, stock tips, other apps), answer briefly then tie back to what their numbers suggest.
+
+${dataNote}
+
+## DATABASE CONTEXT
+
+**Profile:** ${profile?.full_name || 'User'}${profile?.email ? ` (${profile.email})` : ''}
+
+**Across loaded transactions**
+- Total income: $${totalIncome.toFixed(2)}
+- Total expenses: $${totalExpenses.toFixed(2)}
+- Net (income − expenses): $${netBalance.toFixed(2)}
+
+**Calendar month ${currentMonth} (subset of loaded txs)**
+- Income this month: $${monthlyIncome.toFixed(2)}
+- Expenses this month: $${monthlyExpenses.toFixed(2)}
+- Net this month: $${(monthlyIncome - monthlyExpenses).toFixed(2)}
+
+**Top expense categories (loaded data)**  
+${topExpenseCategories.length ? topExpenseCategories.map((c) => `- ${c.category}: $${c.amount.toFixed(2)}`).join('\n') : '- None (no categorized expenses in snapshot)'}
+
+**Top income categories (loaded data)**  
+${topIncomeCategories.length ? topIncomeCategories.map((c) => `- ${c.category}: $${c.amount.toFixed(2)}`).join('\n') : '- None'}
+
+**Budgets vs this month’s spending**  
+${budgetStatus.length ? budgetStatus.map((b) => `- ${b.category}: spent $${b.spent.toFixed(2)} / budget $${b.budget.toFixed(2)} (${b.percentage}% used) — ${b.status}`).join('\n') : '- No budgets configured'}
+
+**Savings goals**  
+${goalProgress.length ? goalProgress.map((g) => `- ${g.name}: $${g.current.toFixed(2)} / $${g.target.toFixed(2)} (${g.progress}% done)${g.deadline ? `, deadline ${g.deadline}` : ''}`).join('\n') : '- No goals configured'}
+
+**Recent transactions (newest first, up to 40)**  
+${recentLines.length ? recentLines.join('\n') : '- No transactions'}
+
+---
+
+## USER MESSAGE
+"""${userMessage.replace(/"/g, '\\"')}"""
+
+## HOW TO REPLY
+1. **Direct first:** In the opening sentence(s), answer what they asked (or acknowledge greeting / small talk naturally).
+2. **Use numbers:** When relevant, cite specific dollar amounts or categories from the context — not generic advice only.
+3. **Match depth:** Short question → concise reply (roughly 4–12 lines). Complex question → structured reply with short sections or bullet lists.
+4. **Tone:** Clear, friendly, professional — not salesy. Avoid repeating the same canned “try asking me…” suggestions; only offer 1–2 follow-up ideas if they help this user.
+5. **Formatting:** Use Markdown (## for section titles when needed, **bold** sparingly for key numbers, lists when comparing items). No ASCII art walls.
+6. **Emojis:** At most one emoji in the whole reply unless the user is very casual.
+7. **Empty data:** If they have no transactions, say so once and suggest one concrete next step (add income + a few expenses).
+
+Write your reply now:`;
+
     let aiResponse: string;
-    
+
     try {
       if (!process.env.GEMINI_API_KEY) {
         throw new Error('Gemini API key not configured');
       }
 
-      // Use gemini-1.5-flash model
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
-      // Create conversational prompt
-      const prompt = `You are Finley, a friendly and knowledgeable personal finance AI assistant. You help users understand their finances and make better financial decisions.
-
-PERSONALITY:
-- Warm, conversational, and supportive (like talking to a helpful friend)
-- Respond naturally to ALL types of messages: greetings, questions, statements, casual chat
-- If user says "hi", "hello", "hey" - greet them warmly and ask how you can help
-- If user asks vague questions, ask clarifying questions
-- Use emojis to make conversations friendly: 💰 📊 🎯 ✅ ⚠️ 💡 🎉
-- Be encouraging and motivating, never judgmental
-
-USER'S MESSAGE: "${message}"
-
-USER'S FINANCIAL DATA:
-- Total Income: $${totalIncome.toFixed(2)}
-- Total Expenses: $${totalExpenses.toFixed(2)}
-- Net Balance: $${netBalance.toFixed(2)}
-- This Month Income: $${monthlyIncome.toFixed(2)}
-- This Month Expenses: $${monthlyExpenses.toFixed(2)}
-- This Month Net: $${(monthlyIncome - monthlyExpenses).toFixed(2)}
-
-${topCategories.length > 0 ? `TOP SPENDING CATEGORIES:
-${topCategories.map((c, i) => `${i + 1}. ${c.category}: $${c.amount.toFixed(2)}`).join('\n')}` : 'No spending data yet - user hasn\'t added any expense transactions'}
-
-${budgetStatus.length > 0 ? `BUDGET STATUS:
-${budgetStatus.map(b => 
-  `- ${b.category}: $${b.spent.toFixed(2)} spent of $${b.budget.toFixed(2)} budget (${b.percentage}% used) - ${b.status}`
-).join('\n')}` : 'No budgets set yet'}
-
-${goalProgress.length > 0 ? `SAVINGS GOALS:
-${goalProgress.map(g => 
-  `- ${g.name}: $${g.current.toFixed(2)} / $${g.target.toFixed(2)} (${g.progress}% complete)${g.deadline ? ` - Deadline: ${g.deadline}` : ''}`
-).join('\n')}` : 'No savings goals set yet'}
-
-${recentTransactions.length > 0 ? `RECENT TRANSACTIONS (last 5):
-${recentTransactions.slice(0, 5).map(t => 
-  `- ${t.date}: ${t.type === 'income' ? '+' : '-'}$${t.amount.toFixed(2)} - ${t.category}${t.description ? ` (${t.description})` : ''}`
-).join('\n')}` : 'No transactions yet - user just started'}
-
-HOW TO RESPOND:
-1. **Greetings** (hi, hello, hey): Greet warmly and ask how you can help with their finances
-2. **No Data**: If user has $0.00 everywhere, encourage them to start tracking transactions, budgets, and goals. Explain the benefits!
-3. **Questions**: Answer using their actual data, be specific with numbers
-4. **Vague questions**: Ask clarifying questions to understand better
-5. **General advice**: Give personalized tips based on their situation
-6. **Conversational**: Be natural and friendly, like chatting with a friend
-7. **Format**: Use bullet points for lists, keep paragraphs short
-8. **Numbers**: Always use $ and 2 decimals
-9. **Emojis**: Use them to make responses visual and friendly
-
-IMPORTANT: Respond naturally to ANY message type. Be conversational, helpful, and encouraging!
-
-Now respond to the user:`;
-
-
-      const result = await model.generateContent(prompt);
-      const response = result.response;
-      aiResponse = response.text();
-
-      console.log('✅ Gemini AI response generated successfully');
-
-    } catch (error: any) {
-      console.error('Gemini AI Error:', error);
-      console.log('⚠️ Falling back to simple response');
-      
-      // Simple fallback if Gemini fails
+      aiResponse = await generateGeminiText(genAI, prompt);
+    } catch {
       if (transactions.length === 0) {
-        aiResponse = `Hi there! 👋 I'm Finley, your personal finance AI assistant.\n\nI notice you haven't added any transactions yet. Let me help you get started! 🎯\n\n**Why track your finances?**\n- 💰 See exactly where your money goes\n- 📊 Stay within budget and avoid overspending\n- 🎯 Reach your savings goals faster\n- 💡 Get personalized financial advice\n\n**Get started:**\n1. Add some transactions (income and expenses)\n2. Set monthly budgets for your main categories\n3. Create savings goals you want to achieve\n\nOnce you have some data, I can give you detailed insights and advice! What would you like to know about managing your finances?`;
+        aiResponse =
+          'I do not see any transactions in your account yet. Add a few income and expense entries on the **Transactions** page, then ask again — I can break down spending, budgets, and goals from your real data.';
       } else {
-        aiResponse = `I can help you with your finances! 💰\n\nYour current balance is $${netBalance.toFixed(2)} (Income: $${totalIncome.toFixed(2)}, Expenses: $${totalExpenses.toFixed(2)}).\n\nTry asking me:\n- "How much did I spend this month?"\n- "Am I over budget?"\n- "How are my savings goals?"\n- "Give me financial advice"\n\nWhat would you like to know?`;
+        aiResponse = `Here is a quick snapshot from your data (AI unavailable right now): net **$${netBalance.toFixed(2)}** on **${transactions.length}** loaded transactions — **$${monthlyIncome.toFixed(2)}** income and **$${monthlyExpenses.toFixed(2)}** expenses this month (**${currentMonth}**). Try again in a moment for a fuller analysis.`;
       }
     }
 
-    return NextResponse.json({ 
-      response: aiResponse,
-      context: {
-        totalIncome,
-        totalExpenses,
-        netBalance,
-        monthlyIncome,
-        monthlyExpenses,
-        budgetStatus,
-        goalProgress
-      }
-    }, { status: 200 });
-
-  } catch (error: any) {
-    console.error('AI Assistant Error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to get AI response' },
-      { status: 500 }
+      {
+        response: aiResponse,
+        context: {
+          totalIncome,
+          totalExpenses,
+          netBalance,
+          monthlyIncome,
+          monthlyExpenses,
+          budgetStatus,
+          goalProgress,
+        },
+      },
+      { status: 200 }
     );
+  } catch (error: unknown) {
+    console.error('AI Assistant Error:', error);
+    const message = error instanceof Error ? error.message : 'Failed to get AI response';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

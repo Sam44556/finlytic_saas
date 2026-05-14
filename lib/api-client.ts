@@ -1,12 +1,19 @@
 import { supabase } from './supabase/client';
 
 async function getAuthHeaders() {
+  const { data: { session: s0 } } = await supabase.auth.getSession();
+  const now = Math.floor(Date.now() / 1000);
+  const expiring =
+    s0?.expires_at != null && s0.expires_at < now + 120;
+  if (!s0?.access_token || expiring) {
+    await supabase.auth.refreshSession().catch(() => {});
+  }
   const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.access_token;
-  
+  const token = session?.access_token?.trim();
+
   return {
     'Content-Type': 'application/json',
-    ...(token && { 'Authorization': `Bearer ${token}` }),
+    ...(token && { Authorization: `Bearer ${token}` }),
   };
 }
 

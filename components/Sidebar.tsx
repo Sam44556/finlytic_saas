@@ -29,7 +29,6 @@ const navItems = [
   { href: "/budgets", key: "budgets", icon: Wallet2 },
   { href: "/goals", key: "goals", icon: Target },
   { href: "/reports", key: "reports", icon: BarChart3 },
-  { href: "/assistant", key: "assistant", icon: Bot },
   { href: "/subscription", key: "subscription", icon: CreditCard },
   { href: "/settings", key: "settings", icon: Settings },
 ];
@@ -96,7 +95,7 @@ export function Sidebar() {
               <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center shadow-lg">
                 <Wallet className="h-6 w-6 text-white" />
               </div>
-              <span className="font-bold text-xl">Finlytic</span>
+              <span className="font-semibold text-xl">Finlytic</span>
             </Link>
           </div>
 
