@@ -1,17 +1,18 @@
 "use client"
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FileDown, Upload, Eye } from "lucide-react";
+import { FileDown, Upload, Eye, Lock } from "lucide-react";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useTranslations } from 'next-intl';
 import { useAuth } from '@/contexts/AuthContext';
+import { useParams, useRouter } from "next/navigation";
 import { format } from "date-fns";
 
 type ReportOption = 'pdf' | 'csv' | 'import' | null;
@@ -19,6 +20,12 @@ type ReportOption = 'pdf' | 'csv' | 'import' | null;
 function ReportsContent() {
   const t = useTranslations('reports');
   const { getToken } = useAuth();
+  const params = useParams();
+  const router = useRouter();
+  const locale = (params.locale as string) || 'en';
+  
+  const [subscriptionTier, setSubscriptionTier] = useState<string | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [selectedOption, setSelectedOption] = useState<ReportOption>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -36,7 +43,53 @@ function ReportsContent() {
 
   const monthOptions = generateMonthOptions();
 
+  // Fetch user's subscription tier
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const token = await getToken();
+        if (!token) return;
+
+        const response = await fetch('/api/profiles', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setSubscriptionTier(data.subscription_tier || 'free');
+        }
+      } catch (error) {
+        console.error('Failed to fetch profile:', error);
+      } finally {
+        setIsLoadingProfile(false);
+      }
+    };
+
+    fetchProfile();
+  }, [getToken]);
+
   const handleOptionClick = (option: ReportOption) => {
+    // Check if user has pro or lifetime subscription
+    if (subscriptionTier === 'free') {
+      // Show upgrade dialog
+      const confirmed = window.confirm(
+        'Reports feature is only available for Pro and Lifetime subscribers.\n\n' +
+        'Upgrade now to unlock:\n' +
+        '• PDF Report Export\n' +
+        '• CSV Export\n' +
+        '• CSV Import\n' +
+        '• AI-powered insights\n\n' +
+        'Click OK to view subscription plans.'
+      );
+      
+      if (confirmed) {
+        router.push(`/${locale}/subscription`);
+      }
+      return;
+    }
+
     setSelectedOption(option);
     setIsDialogOpen(true);
   };
@@ -261,25 +314,51 @@ function ReportsContent() {
     }
   };
 
+  // Show loading state
+  if (isLoadingProfile) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">{t('title')}</h1>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const isFreeUser = subscriptionTier === 'free';
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-semibold tracking-tight">{t('title')}</h1>
-        <p className="text-muted-foreground">Export and import your financial data</p>
+        <p className="text-muted-foreground">
+          {isFreeUser 
+            ? '🔒 Upgrade to Pro or Lifetime to unlock Reports features' 
+            : 'Export and import your financial data'}
+        </p>
       </div>
 
       <div className="grid gap-6 max-w-4xl">
         {/* Export PDF Button */}
         <Card 
-          className="p-8 cursor-pointer transition-all hover:shadow-lg"
+          className={`p-8 cursor-pointer transition-all ${isFreeUser ? 'opacity-60 hover:opacity-80' : 'hover:shadow-lg'}`}
           onClick={() => handleOptionClick('pdf')}
         >
           <div className="flex items-start gap-6">
-            <div className="h-16 w-16 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
+            <div className="h-16 w-16 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0 relative">
               <FileDown className="h-8 w-8 text-gray-600 dark:text-gray-400" />
+              {isFreeUser && (
+                <div className="absolute -top-1 -right-1 bg-primary rounded-full p-1">
+                  <Lock className="h-4 w-4 text-white" />
+                </div>
+              )}
             </div>
             <div className="flex-1">
-              <h3 className="text-xl font-medium mb-2">{t('exportPdf')}</h3>
+              <h3 className="text-xl font-medium mb-2">
+                {t('exportPdf')}
+                {isFreeUser && <span className="ml-2 text-primary text-sm">• Pro Feature</span>}
+              </h3>
               <p className="text-muted-foreground">{t('exportPdfDesc')}</p>
             </div>
           </div>
@@ -287,15 +366,23 @@ function ReportsContent() {
 
         {/* Export CSV Button */}
         <Card 
-          className="p-8 cursor-pointer transition-all hover:shadow-lg"
+          className={`p-8 cursor-pointer transition-all ${isFreeUser ? 'opacity-60 hover:opacity-80' : 'hover:shadow-lg'}`}
           onClick={() => handleOptionClick('csv')}
         >
           <div className="flex items-start gap-6">
-            <div className="h-16 w-16 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
+            <div className="h-16 w-16 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0 relative">
               <FileDown className="h-8 w-8 text-gray-600 dark:text-gray-400" />
+              {isFreeUser && (
+                <div className="absolute -top-1 -right-1 bg-primary rounded-full p-1">
+                  <Lock className="h-4 w-4 text-white" />
+                </div>
+              )}
             </div>
             <div className="flex-1">
-              <h3 className="text-xl font-medium mb-2">{t('exportCsv')}</h3>
+              <h3 className="text-xl font-medium mb-2">
+                {t('exportCsv')}
+                {isFreeUser && <span className="ml-2 text-primary text-sm">• Pro Feature</span>}
+              </h3>
               <p className="text-muted-foreground">{t('exportCsvDesc')}</p>
             </div>
           </div>
@@ -303,15 +390,23 @@ function ReportsContent() {
 
         {/* Import CSV/XLS Button */}
         <Card 
-          className="p-8 cursor-pointer transition-all hover:shadow-lg"
+          className={`p-8 cursor-pointer transition-all ${isFreeUser ? 'opacity-60 hover:opacity-80' : 'hover:shadow-lg'}`}
           onClick={() => handleOptionClick('import')}
         >
           <div className="flex items-start gap-6">
-            <div className="h-16 w-16 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+            <div className="h-16 w-16 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 relative">
               <Upload className="h-8 w-8 text-primary" />
+              {isFreeUser && (
+                <div className="absolute -top-1 -right-1 bg-primary rounded-full p-1">
+                  <Lock className="h-4 w-4 text-white" />
+                </div>
+              )}
             </div>
             <div className="flex-1">
-              <h3 className="text-xl font-medium mb-2">{t('importCsv')}</h3>
+              <h3 className="text-xl font-medium mb-2">
+                {t('importCsv')}
+                {isFreeUser && <span className="ml-2 text-primary text-sm">• Pro Feature</span>}
+              </h3>
               <p className="text-muted-foreground">{t('importCsvDesc')}</p>
             </div>
           </div>
